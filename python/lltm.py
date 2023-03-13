@@ -1,6 +1,7 @@
 import math
 import torch
 import torch.nn.functional as F
+from torch.cuda.nvtx import range_push, range_pop
 
 torch.manual_seed(42)
 
@@ -27,18 +28,32 @@ class LLTM(torch.nn.Module):
         X = torch.cat([old_h, input], dim=1)
 
         # Compute the input, output and candidate cell gates with one MM.
+        range_push("Linear")
         gate_weights = F.linear(X, self.weights, self.bias)
+        range_pop()
         # Split the combined gate weight matrix into its components.
+        range_push("Chunk") # memory copy ? pointer allocation ?
         gates = gate_weights.chunk(3, dim=1)
+        range_pop()
 
+        range_push("Sigmoid 1")
         input_gate = torch.sigmoid(gates[0])
+        range_pop()
+        range_push("Sigmoid 2")
         output_gate = torch.sigmoid(gates[1])
+        range_pop()
         # Here we use an ELU instead of the usual tanh.
+        range_push("ELu")
         candidate_cell = F.elu(gates[2])
+        range_pop()
 
         # Compute the new cell state.
+        range_push("NewCell") # memory copy ??
         new_cell = old_cell + candidate_cell * input_gate
+        range_pop()
         # Compute the new hidden state and output.
+        range_push("Tanh")
         new_h = torch.tanh(new_cell) * output_gate
+        range_pop()
 
         return new_h, new_cell

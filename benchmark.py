@@ -6,6 +6,7 @@ import math
 import time
 
 import torch
+from torch.cuda.nvtx import range_push, range_pop
 
 TIME_SCALES = {'s': 1, 'ms': 1000, 'us': 1000000}
 
@@ -51,13 +52,17 @@ for _ in range(options.runs):
     rnn.zero_grad()
 
     start = time.time()
+    range_push(f"Forward {_}")
     new_h, new_C = rnn(X, (h, C))
+    range_pop()
     elapsed = time.time() - start
     forward_min = min(forward_min, elapsed)
     forward_time += elapsed
 
     start = time.time()
+    range_push(f"Backward {_}")
     (new_h.sum() + new_C.sum()).backward()
+    range_pop()
     elapsed = time.time() - start
     backward_min = min(backward_min, elapsed)
     backward_time += elapsed
